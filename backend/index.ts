@@ -55,19 +55,20 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.post('/api/orders', async (req, res) => {
-  const { userName, email, phone, address, totalPrice, items } = req.body;
+  // Дістаємо дані точно так, як їх шле фронтенд
+  const { customerName, customerEmail, customerPhone, customerAddress, totalPrice, items } = req.body;
 
   try {
     const order = await prisma.order.create({
       data: {
-        name: userName, 
-        email, 
-        phone, 
-        address, 
+        name: customerName,        // Збігається з моделлю Prisma
+        email: customerEmail,
+        phone: customerPhone,
+        address: customerAddress,
         totalPrice: Number(totalPrice),
         items: {
           create: items.map((item: any) => ({
-            productId: item.id, 
+            productId: item.productId, // Збігається з тим, що шле CartPage
             quantity: Number(item.quantity),
             price: Number(item.price), 
           })),
@@ -77,7 +78,7 @@ app.post('/api/orders', async (req, res) => {
         items: true 
       }
     });
-    res.json(order);
+    res.status(201).json(order);
   } catch (error) {
     console.error("ORDER ERROR:", error);
     res.status(500).json({ error: "Не вдалося створити замовлення" });

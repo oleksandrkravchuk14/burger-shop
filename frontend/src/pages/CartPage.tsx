@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useCart } from '../context/CartContext';
+import api from '../api/axios'; 
 
 const CartPage = () => {
-  const { cart, updateQuantity, removeFromCart, totalPrice } = useCart();
+  const { cart, updateQuantity, removeFromCart, totalPrice, clearCart } = useCart();
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -15,23 +17,82 @@ const CartPage = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 1. Валідація Email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      alert("Будь ласка, введіть коректну електронну пошту.");
+      return;
+    }
+
+    // 2. Валідація телефону (тільки цифри, мінімум 10)
+    const phoneRegex = /^\d{10,}$/;
+    const cleanPhone = formData.phone.replace(/\D/g, ''); // видаляємо все крім цифр для перевірки
+    if (!phoneRegex.test(cleanPhone)) {
+      alert("Введіть коректний номер телефону (мінімум 10 цифр).");
+      return;
+    }
+
+    if (!formData.name || !formData.address) {
+      alert("Будь ласка, заповніть всі поля.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Відправка в БД
+      const response = await api.post('/orders', {
+        customerName: formData.name,
+        customerEmail: formData.email,
+        customerPhone: formData.phone,
+        customerAddress: formData.address,
+        totalPrice: totalPrice,
+        items: cart.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+          price: item.price
+        }))
+      });
+
+      if (response.status === 201 || response.status === 200) {
+        alert("🎉 Замовлення прийнято! Смачного!");
+        clearCart();
+        setFormData({ name: '', email: '', phone: '', address: '' });
+      }
+    } catch (error: any) {
+      console.error("Order submit error:", error);
+      alert("Помилка при відправці замовлення. Перевірте з'єднання з сервером.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="w-full min-h-screen bg-gray-50 p-4 md:p-8 text-gray-900">
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row gap-8">
         
         {/* ЛІВА ПАНЕЛЬ (Форма) */}
-        <div className="w-full md:w-1/2 bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 h-fit">
+        <div className="w-full md:w-1/2 bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 h-fit">
           <h2 className="text-2xl font-black mb-6">Delivery Details</h2>
-          <form className="flex flex-col gap-5">
-            {['name', 'email', 'phone'].map((field) => (
-              <div key={field} className="flex flex-col gap-2">
-                <label className="text-xs font-bold text-gray-400 uppercase ml-2 tracking-widest">{field}</label>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {[
+              { id: 'name', label: 'Name', type: 'text', placeholder: 'Enter your name...' },
+              { id: 'email', label: 'Email', type: 'email', placeholder: 'example@mail.com' },
+              { id: 'phone', label: 'Phone', type: 'text', placeholder: '0931234567' }
+            ].map((field) => (
+              <div key={field.id} className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-gray-400 uppercase ml-2 tracking-widest">
+                  {field.label}
+                </label>
                 <input 
-                  type={field === 'email' ? 'email' : 'text'}
-                  name={field}
-                  value={(formData as any)[field]}
+                  type={field.type}
+                  name={field.id}
+                  value={(formData as any)[field.id]}
                   onChange={handleChange}
-                  placeholder={`Enter your ${field}...`}
+                  placeholder={field.placeholder}
                   className="w-full p-4 bg-gray-50 border border-transparent focus:border-orange-500 focus:bg-white rounded-2xl outline-none transition-all font-medium"
                 />
               </div>
@@ -51,18 +112,18 @@ const CartPage = () => {
 
         {/* ПРАВА ПАНЕЛЬ (Товари) */}
         <div className="w-full md:w-1/2">
-          <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col max-h-[calc(100vh-100px)]">
+          <div className="bg-white p-6 rounded-[2rem] md:rounded-[2.5rem] shadow-sm border border-gray-100 flex flex-col max-h-none md:max-h-[calc(100vh-100px)]">
             <h2 className="text-2xl font-black mb-6 px-2">Order Summary</h2>
             
             <div className="overflow-y-auto pr-2 no-scrollbar flex flex-col gap-4">
               {cart.length > 0 ? (
                 cart.map(item => (
-                  <div key={item.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-[1.8rem] border border-gray-50 group">
-                    <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center text-3xl shadow-sm">
+                  <div key={item.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-[1.8rem] border border-gray-50">
+                    <div className="w-16 h-16 md:w-20 md:h-20 bg-white rounded-2xl flex-shrink-0 flex items-center justify-center text-2xl md:text-3xl shadow-sm">
                       {item.categoryId === 2 ? '🥤' : '🍔'}
                     </div>
-                    <div className="flex-grow">
-                      <h4 className="font-bold text-gray-800">{item.name}</h4>
+                    <div className="flex-grow min-w-0">
+                      <h4 className="font-bold text-gray-800 truncate">{item.name}</h4>
                       <p className="text-orange-600 font-black">{item.price} UAH</p>
                       
                       <div className="flex items-center gap-3 mt-2">
@@ -98,10 +159,11 @@ const CartPage = () => {
                 <span className="text-3xl font-black text-gray-800">{totalPrice} UAH</span>
               </div>
               <button 
+                onClick={handleSubmit}
+                disabled={cart.length === 0 || loading}
                 className="w-full py-5 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl font-black text-xl shadow-lg transition-all active:scale-95 disabled:bg-gray-200"
-                disabled={cart.length === 0}
               >
-                Submit Order
+                {loading ? "Sending..." : "Submit Order"}
               </button>
             </div>
           </div>
